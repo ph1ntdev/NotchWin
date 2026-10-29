@@ -1,0 +1,43 @@
+name: release
+
+# Выпуск новой версии: создайте тег вида v1.0.0 и отправьте его на GitHub
+#   git tag v1.0.0
+#   git push origin v1.0.0
+# GitHub сам соберёт программу и опубликует её во вкладке Releases.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # Маленькая сборка: нужен установленный .NET 8 Desktop Runtime.
+      - run: dotnet publish src/NotchWin -c Release -r win-x64 --self-contained false -o out/NotchWin
+      - run: Compress-Archive -Path out/NotchWin/* -DestinationPath NotchWin-${{ github.ref_name }}-win-x64.zip
+
+      # Полная сборка: работает без установленного .NET, но весит больше.
+      - run: dotnet publish src/NotchWin -c Release -r win-x64 --self-contained true -o out/NotchWin-full
+      - run: Compress-Archive -Path out/NotchWin-full/* -DestinationPath NotchWin-${{ github.ref_name }}-win-x64-full.zip
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            NotchWin-${{ github.ref_name }}-win-x64.zip
+            NotchWin-${{ github.ref_name }}-win-x64-full.zip
+          body: |
+            **Как установить:** скачайте архив, распакуйте в любую папку и запустите `NotchWin.exe`.
+
+            - `win-x64.zip` — маленький, нужен [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) (x64).
+            - `win-x64-full.zip` — работает сразу, без установки .NET.
+
+            Выход: правый клик по верхней панели → «Выход». Автозапуск включается в настройках.

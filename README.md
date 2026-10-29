@@ -8,7 +8,13 @@
 ![NotchWin](docs/screenshot.png)
 -->
 
-## Быстрый старт
+## Скачать
+
+Готовая программа лежит во вкладке **Releases** справа на странице репозитория. Скачайте архив, распакуйте в любую папку и запустите `NotchWin.exe`:
+- `win-x64-full.zip` работает сразу;
+- `win-x64.zip` меньше, но нужен [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0).
+
+## Запуск из исходников
 
 Нужны Windows 10 (версия 2004 и новее) или Windows 11 и [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 
