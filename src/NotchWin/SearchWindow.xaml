@@ -1,0 +1,47 @@
+<Window x:Class="NotchWin.SearchWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Поиск"
+        Width="640" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize"
+        Background="Transparent"
+        Topmost="True" ShowInTaskbar="False"
+        UseLayoutRounding="True"
+        FontFamily="Segoe UI Variable Text, Segoe UI">
+
+  <!-- Поиск как Spotlight: приложения, файлы, калькулятор и поиск в интернете. -->
+  <Border x:Name="Card" Background="#F21C1C1E" CornerRadius="14" BorderBrush="#30FFFFFF" BorderThickness="1"
+          RenderTransformOrigin="0.5,0">
+    <Border.RenderTransform>
+      <ScaleTransform x:Name="CardScale"/>
+    </Border.RenderTransform>
+    <StackPanel>
+      <Grid Height="58" Margin="18,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition/>
+        </Grid.ColumnDefinitions>
+        <TextBlock Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="20" Foreground="#99FFFFFF"
+                   VerticalAlignment="Center" Margin="0,0,14,0"/>
+        <TextBlock x:Name="Placeholder" Grid.Column="1" Text="Поиск приложений, файлов, вычислений" FontSize="21"
+                   Foreground="#55FFFFFF" VerticalAlignment="Center" IsHitTestVisible="False" Margin="2,0,0,0"/>
+        <TextBox x:Name="QueryBox" Grid.Column="1" FontSize="21" Foreground="White" CaretBrush="White"
+                 SelectionBrush="#0A84FF" Background="Transparent" BorderThickness="0" VerticalAlignment="Center"
+                 TextChanged="OnQueryChanged" PreviewKeyDown="OnQueryKeyDown">
+          <TextBox.Template>
+            <ControlTemplate TargetType="TextBox">
+              <ScrollViewer x:Name="PART_ContentHost"/>
+            </ControlTemplate>
+          </TextBox.Template>
+        </TextBox>
+      </Grid>
+
+      <!-- Высота результатов постоянная: окно не прыгает, пока подгружаются файлы -->
+      <Border x:Name="ResultsArea" Visibility="Collapsed" BorderBrush="#22FFFFFF" BorderThickness="0,1,0,0">
+        <ScrollViewer x:Name="ResultsScroll" Height="372" VerticalScrollBarVisibility="Auto" Padding="8,6">
+          <StackPanel x:Name="ResultsPanel"/>
+        </ScrollViewer>
+      </Border>
+    </StackPanel>
+  </Border>
+</Window>

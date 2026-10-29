@@ -1,0 +1,514 @@
+<Window x:Class="NotchWin.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:NotchWin"
+        Title="Notch"
+        Width="480" Height="240"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        UseLayoutRounding="True"
+        AllowDrop="True"
+        FontFamily="Segoe UI Variable Text, Segoe UI"
+        MouseEnter="OnMouseEnterIsland"
+        MouseLeave="OnMouseLeaveIsland"
+        DragEnter="OnDragEnter"
+        DragOver="OnDragOver"
+        DragLeave="OnDragLeave"
+        Drop="OnDrop">
+
+  <!-- Челка поверх верхней панели. Свёрнутая совпадает с панелью по высоте и ничего не закрывает.
+       Прозрачные пиксели окна пропускают клики насквозь. -->
+  <Window.Resources>
+    <Style x:Key="Icon" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style x:Key="Pill" TargetType="Button">
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Height" Value="28"/>
+      <Setter Property="Padding" Value="12,0"/>
+      <Setter Property="Margin" Value="0,0,6,0"/>
+      <Setter Property="Background" Value="#26FFFFFF"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="14" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bg" Property="Opacity" Value="0.8"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- Векторные значки: не зависят от шрифтов, поэтому не превращаются в прямоугольники -->
+    <Geometry x:Key="PlayGeo">M0,0 L10,6 L0,12 Z</Geometry>
+    <Geometry x:Key="PauseGeo">M0,0 H3.5 V12 H0 Z M6.5,0 H10 V12 H6.5 Z</Geometry>
+    <Geometry x:Key="StopGeo">M0,0 H10 V10 H0 Z</Geometry>
+    <Geometry x:Key="PlusGeo">M4,0 H6 V4 H10 V6 H6 V10 H4 V6 H0 V4 H4 Z</Geometry>
+    <Style x:Key="SideCard" TargetType="Border" BasedOn="{StaticResource PopupCard}">
+      <Setter Property="Width" Value="300"/>
+    </Style>
+  </Window.Resources>
+
+  <Grid x:Name="Root">
+    <Grid.ContextMenu>
+      <ContextMenu>
+        <MenuItem Header="Настройки" Click="OnSettings"/>
+        <MenuItem Header="Выход" Click="OnExit"/>
+      </ContextMenu>
+    </Grid.ContextMenu>
+
+    <!-- Форма челки: тело со скруглёнными нижними углами и "ушки" сверху, как на MacBook.
+         Тонкий светлый контур виден даже на тёмных обоях. -->
+    <Path x:Name="Shape" Fill="Black" Stroke="#2EFFFFFF" StrokeThickness="1"/>
+
+    <Grid x:Name="Body" HorizontalAlignment="Center" VerticalAlignment="Top" ClipToBounds="True">
+
+      <!-- ===== Свёрнутый вид. Посередине основная часть: слева место под обложку, по центру точки
+           камеры и микрофона, справа эквалайзер. Таймер и загрузка живут в «крыльях» по бокам:
+           челка раздвигается в обе стороны, и они въезжают в освободившееся место. ===== -->
+      <Grid x:Name="CollapsedView" Height="32" VerticalAlignment="Top">
+        <StackPanel x:Name="LeftWing" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center"
+                    Margin="14,0,0,0" Opacity="0">
+          <TextBlock x:Name="CompactTimer" Foreground="#FFFF9F0A" FontSize="12.5" FontWeight="SemiBold"
+                     Typography.NumeralAlignment="Tabular" VerticalAlignment="Center" Visibility="Collapsed"/>
+          <!-- Звонок в Discord: значок микрофона цвета Discord и время в звонке -->
+          <StackPanel x:Name="DiscordWing" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+            <TextBlock x:Name="DiscordWingIcon" Style="{StaticResource Icon}" Text="&#xE720;" FontSize="12"
+                       Foreground="#FF5865F2"/>
+            <TextBlock x:Name="DiscordWingTime" Foreground="#FF8B95F7" FontSize="12.5" FontWeight="SemiBold" Margin="5,0,0,0"
+                       Typography.NumeralAlignment="Tabular" VerticalAlignment="Center"/>
+          </StackPanel>
+        </StackPanel>
+        <StackPanel x:Name="RightWing" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Margin="0,0,14,0" Opacity="0">
+          <!-- Кружок загрузки/копирования: заполняется по мере передачи -->
+          <Grid x:Name="TransferRing" Width="18" Height="18" Visibility="Collapsed">
+            <Ellipse Stroke="#40FFFFFF" StrokeThickness="2.4"/>
+            <Path x:Name="TransferArc" Stroke="White" StrokeThickness="2.4" StrokeStartLineCap="Round"
+                  StrokeEndLineCap="Round"/>
+          </Grid>
+        </StackPanel>
+
+        <Grid x:Name="CompactSlots" Width="206" HorizontalAlignment="Center">
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Ellipse x:Name="CameraDot" Width="7" Height="7" Fill="#FF30D158" Margin="2,0" Visibility="Collapsed"/>
+            <Ellipse x:Name="MicDot" Width="7" Height="7" Fill="#FFFF9F0A" Margin="2,0" Visibility="Collapsed"/>
+          </StackPanel>
+          <StackPanel x:Name="Bars" Orientation="Horizontal" Height="16" HorizontalAlignment="Right"
+                      VerticalAlignment="Center" Visibility="Collapsed"/>
+        </Grid>
+
+        <!-- «Живое» уведомление: громкость, яркость, начало загрузки, конец таймера -->
+        <Grid x:Name="ActivityView" Visibility="Collapsed" Opacity="0" Width="316" HorizontalAlignment="Center">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <TextBlock x:Name="ActivityIcon" Style="{StaticResource Icon}" FontSize="15"/>
+          <!-- Аватар отправителя для уведомлений Telegram и ВК -->
+          <Border x:Name="ActivityImageHost" Width="22" Height="22" CornerRadius="11" Visibility="Collapsed">
+            <Border.Background>
+              <ImageBrush x:Name="ActivityImage" Stretch="UniformToFill"/>
+            </Border.Background>
+          </Border>
+          <TextBlock x:Name="ActivityText" Grid.Column="1" Foreground="White" FontSize="12" Margin="10,0,0,0"
+                     VerticalAlignment="Center" MaxWidth="150" TextTrimming="CharacterEllipsis"/>
+          <Grid Grid.Column="2" Margin="10,0" VerticalAlignment="Center" Height="4" x:Name="ActivityTrack">
+            <Border Background="#33FFFFFF" CornerRadius="2"/>
+            <Border x:Name="ActivityFill" Background="White" CornerRadius="2" HorizontalAlignment="Left" Width="0"/>
+          </Grid>
+          <TextBlock x:Name="ActivityValue" Grid.Column="3" Foreground="#CCFFFFFF" FontSize="12"
+                     VerticalAlignment="Center" MaxWidth="120" TextTrimming="CharacterEllipsis"/>
+        </Grid>
+      </Grid>
+
+      <!-- ===== Раскрытый вид. Лежит в Canvas, чтобы во время анимации не перестраиваться, а просто обрезаться. ===== -->
+      <Canvas x:Name="ExpandedHost">
+        <Grid x:Name="ExpandedView" Opacity="0" IsHitTestVisible="False">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="32"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="18"/>
+          </Grid.RowDefinitions>
+
+          <!-- Шапка в полосе панели: вкладки слева, Wi-Fi, Bluetooth и настройки справа -->
+          <Grid Margin="18,0">
+            <StackPanel x:Name="TabsPanel" Orientation="Horizontal" VerticalAlignment="Center">
+              <Button x:Name="TabMedia" Style="{StaticResource IconButton}" Width="30" Height="26" FontSize="14"
+                      Content="&#xE8D6;" ToolTip="Музыка" Click="OnTab"/>
+              <Button x:Name="TabShelf" Style="{StaticResource IconButton}" Width="30" Height="26" FontSize="14"
+                      Content="&#xE7B8;" ToolTip="Полка для файлов" Click="OnTab"/>
+              <Button x:Name="TabTimer" Style="{StaticResource IconButton}" Width="30" Height="26" FontSize="14"
+                      Content="&#xE916;" ToolTip="Таймер" Click="OnTab"/>
+              <Button x:Name="TabNote" Style="{StaticResource IconButton}" Width="30" Height="26" FontSize="14"
+                      Content="&#xE70B;" ToolTip="Быстрая заметка" Click="OnTab"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+              <!-- Наведение открывает отдельное окно со списком, клик включает и выключает -->
+              <Button x:Name="WifiToggle" Style="{StaticResource IconButton}" Width="30" Height="26" FontSize="14"
+                      Content="&#xE701;" Click="OnWifiToggle" MouseEnter="OnWifiHover" MouseLeave="OnSideHoverLeave"/>
+              <Button x:Name="BluetoothToggle" Style="{StaticResource IconButton}" Width="30" Height="26" FontSize="14"
+                      Content="&#xE702;" Click="OnBluetoothToggle" MouseEnter="OnBluetoothHover" MouseLeave="OnSideHoverLeave"/>
+              <Button Style="{StaticResource IconButton}" Width="30" Height="26" FontSize="14"
+                      Content="&#xE713;" ToolTip="Настройки" Click="OnSettings"/>
+            </StackPanel>
+          </Grid>
+
+          <Grid Grid.Row="1" Margin="18,8,18,0">
+
+            <!-- Музыка. Высота постоянная: таймлайн скрывается без схлопывания, чтобы челка не прыгала. -->
+            <StackPanel x:Name="MediaPage">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto"/>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <!-- Место под обложку. Саму обложку рисует MorphCover, который перетекает из свёрнутой челки. -->
+                <Border x:Name="CoverSlot" Width="60" Height="60" CornerRadius="12" Background="#FF1F1F1F"/>
+                <StackPanel Grid.Column="1" Margin="14,0,8,0" VerticalAlignment="Center">
+                  <TextBlock x:Name="TitleText" Text="Ничего не играет" Foreground="White"
+                             FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                  <TextBlock x:Name="ArtistText" Text="Включите музыку в любом плеере" Foreground="#99FFFFFF"
+                             FontSize="12.5" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                  <Button Style="{StaticResource IconButton}" Content="&#xE892;" Click="OnPrevious" ToolTip="Назад"/>
+                  <Button x:Name="PlayPauseButton" Style="{StaticResource IconButton}" Content="&#xE768;"
+                          FontSize="20" Width="40" Height="40" Click="OnPlayPause"/>
+                  <Button Style="{StaticResource IconButton}" Content="&#xE893;" Click="OnNext" ToolTip="Вперёд"/>
+                </StackPanel>
+              </Grid>
+
+              <!-- Таймлайн: тяните или кликните, чтобы перемотать -->
+              <Grid x:Name="TimelineRow" Margin="0,10,0,0" Visibility="Hidden">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="40"/>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="40"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="PositionText" Foreground="#99FFFFFF" FontSize="11" VerticalAlignment="Center"/>
+                <!-- IsMoveToPointEnabled выключен: иначе Slider сам «съедает» клик и наш обработчик перемотки не вызывается -->
+                <Slider x:Name="TimelineSlider" Grid.Column="1" Style="{StaticResource FlatSlider}" Margin="6,0"
+                        Maximum="1000" IsMoveToPointEnabled="False"
+                        PreviewMouseMove="OnTimelineMove" PreviewMouseLeftButtonUp="OnTimelineUp"
+                        LostMouseCapture="OnTimelineLostCapture"/>
+                <TextBlock x:Name="DurationText" Grid.Column="2" Foreground="#99FFFFFF" FontSize="11"
+                           VerticalAlignment="Center" TextAlignment="Right"/>
+              </Grid>
+            </StackPanel>
+
+            <!-- Полка для файлов -->
+            <Grid x:Name="ShelfPage" Visibility="Collapsed">
+              <Border x:Name="ShelfDropHint" Height="96" CornerRadius="12" BorderThickness="1.5"
+                      BorderBrush="#40FFFFFF" Background="#0DFFFFFF">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                  <TextBlock Style="{StaticResource Icon}" Text="&#xE896;" FontSize="20" HorizontalAlignment="Center"
+                             Foreground="#99FFFFFF"/>
+                  <TextBlock Text="Перетащите файлы сюда" Foreground="#99FFFFFF" FontSize="12.5" Margin="0,6,0,0"/>
+                </StackPanel>
+              </Border>
+              <Grid x:Name="ShelfContent" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <ScrollViewer x:Name="ShelfScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                  <StackPanel x:Name="ShelfItems" Orientation="Horizontal" Margin="0,0,0,4"/>
+                </ScrollViewer>
+                <Grid Grid.Row="1" Margin="0,4,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="Тяните файлы в любое окно" Foreground="#66FFFFFF" FontSize="11"
+                             VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,8,0"/>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <!-- Отправка на телефон или другой компьютер через LocalSend -->
+                    <Button x:Name="ShelfSendButton" Style="{StaticResource Pill}" Height="24" Click="OnShelfSend">
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE72D;" FontSize="11" Margin="0,0,6,0"/>
+                        <TextBlock Text="LocalSend"/>
+                      </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource Pill}" Content="Очистить" Height="24" Margin="0" Click="OnShelfClear"
+                            ToolTip="Закреплённые файлы останутся"/>
+                  </StackPanel>
+                </Grid>
+              </Grid>
+            </Grid>
+
+            <!-- Быстрая заметка: в Obsidian или в обычную папку (см. настройки «Заметки») -->
+            <Grid x:Name="NotePage" Visibility="Collapsed">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+              </Grid.RowDefinitions>
+              <Border Background="#1AFFFFFF" CornerRadius="10" Padding="10,6" Height="76">
+                <Grid>
+                  <TextBlock x:Name="NotePlaceholder" Text="Мысль, задача, ссылка…" Foreground="#55FFFFFF"
+                             FontSize="13" IsHitTestVisible="False" Margin="2,1,0,0"/>
+                  <TextBox x:Name="NoteBox" AcceptsReturn="True" TextWrapping="Wrap" Background="Transparent"
+                           Foreground="White" CaretBrush="White" SelectionBrush="#7C5CFF" FontSize="13"
+                           VerticalScrollBarVisibility="Auto" PreviewMouseDown="OnNoteFocus"
+                           PreviewKeyDown="OnNoteKeyDown" TextChanged="OnNoteChanged">
+                    <TextBox.Template>
+                      <ControlTemplate TargetType="TextBox">
+                        <ScrollViewer x:Name="PART_ContentHost"/>
+                      </ControlTemplate>
+                    </TextBox.Template>
+                  </TextBox>
+                </Grid>
+              </Border>
+              <Grid Grid.Row="1" Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="NoteStatus" Foreground="#66FFFFFF" FontSize="11" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" Margin="0,0,8,0"/>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                  <Button Style="{StaticResource Pill}" Content="Открыть" Height="26" Click="OnNoteOpen"/>
+                  <Button Style="{StaticResource Pill}" Height="26" Margin="0" Background="#FF7C5CFF" Click="OnNoteSave">
+                    <TextBlock Text="Сохранить" FontWeight="SemiBold"/>
+                  </Button>
+                </StackPanel>
+              </Grid>
+            </Grid>
+
+            <!-- Таймер: слева время и шкала минут, справа большая кнопка Старт и под ней Стоп/Сброс и Помодоро -->
+            <Grid x:Name="TimerPage" Visibility="Collapsed">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="150"/>
+              </Grid.ColumnDefinitions>
+              <StackPanel Margin="0,0,14,0">
+                <TextBlock x:Name="TimerModeText" Text="Таймер" Foreground="#99FFFFFF" FontSize="12"/>
+                <TextBlock x:Name="TimerBigText" Text="05:00" Foreground="White" FontSize="34" FontWeight="SemiBold"
+                           FontFamily="Segoe UI Variable Display, Segoe UI"/>
+                <local:TimeRuler x:Name="TimerRuler" Margin="0,4,0,0"/>
+              </StackPanel>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <Button x:Name="TimerStartButton" Style="{StaticResource Pill}" Height="44" Margin="0"
+                        Background="#FFFF9F0A" Click="OnTimerToggle">
+                  <StackPanel Orientation="Horizontal">
+                    <Path x:Name="TimerStartIcon" Data="{StaticResource PlayGeo}" Fill="Black" Width="11" Height="13"
+                          Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock x:Name="TimerStartText" Text="Старт" Foreground="Black" FontSize="14" FontWeight="SemiBold"/>
+                  </StackPanel>
+                </Button>
+                <Grid Margin="0,8,0,0">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <Button x:Name="TimerStopButton" Style="{StaticResource Pill}" Margin="0" Padding="6,0"
+                          Click="OnTimerStopReset">
+                    <StackPanel Orientation="Horizontal">
+                      <Path x:Name="TimerStopIcon" Data="{StaticResource StopGeo}" Fill="White" Width="8" Height="8"
+                            Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                      <TextBlock x:Name="TimerStopText" Text="Сброс"/>
+                    </StackPanel>
+                  </Button>
+                  <Button Grid.Column="2" Style="{StaticResource Pill}" Margin="0" Padding="6,0"
+                          Background="#33FF9F0A" Click="OnPomodoro" ToolTip="25 минут работы, 5 отдыха">
+                    <TextBlock Text="Помодоро" Foreground="#FFFFB340"/>
+                  </Button>
+                </Grid>
+              </StackPanel>
+            </Grid>
+          </Grid>
+
+          <!-- Идущая загрузка или копирование: подробности под основным содержимым -->
+          <StackPanel Grid.Row="2">
+          <Grid x:Name="TransferInfo" Margin="18,10,18,0" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="TransferInfoIcon" Style="{StaticResource Icon}" Text="&#xE896;" FontSize="13"/>
+            <TextBlock x:Name="TransferInfoName" Grid.Column="1" Foreground="White" FontSize="12" Margin="8,0"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="TransferInfoDetail" Grid.Column="2" Foreground="#99FFFFFF" FontSize="11.5"
+                       VerticalAlignment="Center"/>
+          </Grid>
+
+          <!-- Discord: идущий звонок (время, микрофон, звук) или входящий звонок (кто звонит, «Открыть») -->
+          <Grid x:Name="DiscordInfo" Margin="18,10,18,0" Height="30" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Style="{StaticResource Icon}" Text="&#xE720;" FontSize="13" Foreground="#FF5865F2"/>
+            <TextBlock x:Name="DiscordInfoText" Grid.Column="1" Foreground="White" FontSize="12" Margin="8,0"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <StackPanel x:Name="DiscordCallButtons" Grid.Column="2" Orientation="Horizontal">
+              <Button x:Name="DiscordMuteButton" Style="{StaticResource IconButton}" Width="30" Height="26" FontSize="14"
+                      Content="&#xE720;" Click="OnDiscordMute"/>
+              <Button x:Name="DiscordDeafenButton" Style="{StaticResource IconButton}" Width="30" Height="26" FontSize="14"
+                      Content="&#xE7F6;" Click="OnDiscordDeafen"/>
+            </StackPanel>
+            <Button x:Name="DiscordOpenButton" Grid.Column="2" Style="{StaticResource Pill}" Margin="0"
+                    Background="#FF5865F2" Content="Открыть" Click="OnDiscordOpen" Visibility="Collapsed"/>
+          </Grid>
+          </StackPanel>
+
+          <!-- Пока над челкой тащат файл: две зоны, куда его бросить -->
+          <Grid x:Name="DropZones" Grid.Row="1" Grid.RowSpan="2" Margin="18,8,18,0" Background="Black"
+                Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition/>
+              <ColumnDefinition Width="10"/>
+              <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+            <Border x:Name="DropShelf" CornerRadius="14" BorderThickness="1.5">
+              <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE7B8;" FontSize="22" HorizontalAlignment="Center"/>
+                <TextBlock Text="Отложить" Foreground="White" FontSize="14" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                <TextBlock Text="Полежит на полке" Foreground="#99FFFFFF" FontSize="11.5"
+                           HorizontalAlignment="Center" Margin="10,2,10,0" TextWrapping="Wrap" TextAlignment="Center"/>
+              </StackPanel>
+            </Border>
+            <Border x:Name="DropSend" Grid.Column="2" CornerRadius="14" BorderThickness="1.5">
+              <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE72D;" FontSize="22" HorizontalAlignment="Center"/>
+                <TextBlock Text="LocalSend" Foreground="White" FontSize="14" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                <TextBlock Text="На телефон или ПК" Foreground="#99FFFFFF" FontSize="11.5"
+                           HorizontalAlignment="Center" Margin="10,2,10,0" TextWrapping="Wrap" TextAlignment="Center"/>
+              </StackPanel>
+            </Border>
+          </Grid>
+
+        </Grid>
+      </Canvas>
+
+      <!-- Обложка, которая плавно перетекает из маленькой (свёрнутая челка) в большую (плеер) -->
+      <Canvas IsHitTestVisible="False">
+        <Border x:Name="MorphCover" Width="20" Height="20" CornerRadius="5" Visibility="Collapsed">
+          <Border.Background>
+            <ImageBrush x:Name="MorphCoverBrush" Stretch="UniformToFill"/>
+          </Border.Background>
+        </Border>
+      </Canvas>
+    </Grid>
+
+    <!-- Wi-Fi: окно выпадает прямо под значком. Сам значок в челке включает и выключает Wi-Fi.
+         Высота постоянная, сообщения и пароль всплывают поверх списка, ничего не сдвигается. -->
+    <Popup x:Name="WifiPopup" PlacementTarget="{Binding ElementName=WifiToggle}" Placement="Bottom"
+           HorizontalOffset="-135" VerticalOffset="6">
+      <Border x:Name="WifiCard" Style="{StaticResource SideCard}" Padding="10" MouseLeave="OnSideHoverLeave">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="24"/>
+            <RowDefinition Height="Auto"/>
+          </Grid.RowDefinitions>
+          <Button Style="{StaticResource IconButton}" Width="26" Height="24" FontSize="12" Content="&#xE72C;"
+                  HorizontalAlignment="Right" Click="OnWifiRescan"/>
+          <Grid Grid.Row="1" Margin="0,6,0,0" Height="236">
+            <ScrollViewer x:Name="WifiScroll" VerticalScrollBarVisibility="Auto">
+              <StackPanel x:Name="WifiList" Margin="0,0,4,0"/>
+            </ScrollViewer>
+            <!-- Сообщение или ввод пароля: лежит поверх низа списка, ничего не сдвигает -->
+            <Border x:Name="WifiOverlay" VerticalAlignment="Bottom" Background="#F2242426" CornerRadius="10"
+                    Padding="10,8" Visibility="Collapsed">
+              <StackPanel>
+                <TextBlock x:Name="WifiMessage" Foreground="#E6FFFFFF" FontSize="12" TextWrapping="Wrap"/>
+                <Grid x:Name="PasswordRow" Margin="0,8,0,0" Visibility="Collapsed">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <Border Background="#22FFFFFF" CornerRadius="8" Padding="10,0" Height="30">
+                    <PasswordBox x:Name="WifiPassword" Background="Transparent" Foreground="White" BorderThickness="0"
+                                 CaretBrush="White" VerticalContentAlignment="Center" KeyDown="OnPasswordKeyDown"/>
+                  </Border>
+                  <Button Grid.Column="1" Style="{StaticResource Pill}" Content="Подключить" Margin="8,0,0,0" Height="30"
+                          Background="#FF0A84FF" Click="OnWifiConnectWithPassword"/>
+                </Grid>
+              </StackPanel>
+            </Border>
+          </Grid>
+        </Grid>
+      </Border>
+    </Popup>
+
+    <!-- Перевод выделенного текста: выпадает из челки по горячей клавише -->
+    <Popup x:Name="TranslatePopup" PlacementTarget="{Binding ElementName=Body}" Placement="Bottom" VerticalOffset="8">
+      <Border x:Name="TranslateCard" Style="{StaticResource SideCard}" Width="420" Padding="14,10">
+        <Grid Height="168">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="26"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+          </Grid.RowDefinitions>
+          <TextBlock x:Name="TranslateLangs" Foreground="#80FFFFFF" FontSize="11.5" VerticalAlignment="Center"/>
+          <Button Style="{StaticResource IconButton}" Width="30" Height="26" FontSize="13" HorizontalAlignment="Right"
+                  Content="&#xE8C8;" Click="OnTranslateCopy"/>
+          <ScrollViewer x:Name="TranslateScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,4,0,0">
+            <TextBlock x:Name="TranslateResult" Foreground="White" FontSize="14.5" TextWrapping="Wrap"/>
+          </ScrollViewer>
+          <TextBlock x:Name="TranslateSource" Grid.Row="2" Foreground="#66FFFFFF" FontSize="11.5" Margin="0,6,0,0"
+                     TextTrimming="CharacterEllipsis"/>
+        </Grid>
+      </Border>
+    </Popup>
+
+    <!-- LocalSend: устройства в сети, клик — отправить файлы с полки -->
+    <Popup x:Name="SendPopup" PlacementTarget="{Binding ElementName=ShelfSendButton}" Placement="Bottom"
+           HorizontalOffset="-110" VerticalOffset="8">
+      <Border x:Name="SendCard" Style="{StaticResource SideCard}" Padding="10">
+        <Grid Height="190">
+          <ScrollViewer x:Name="SendScroll" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="SendList" Margin="0,0,4,0"/>
+          </ScrollViewer>
+          <TextBlock x:Name="SendStatus" Foreground="#80FFFFFF" FontSize="12.5" TextWrapping="Wrap" TextAlignment="Center"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16,0"/>
+        </Grid>
+      </Border>
+    </Popup>
+
+    <!-- Bluetooth: так же выпадает под своим значком -->
+    <Popup x:Name="BluetoothPopup" PlacementTarget="{Binding ElementName=BluetoothToggle}" Placement="Bottom"
+           HorizontalOffset="-135" VerticalOffset="6">
+      <Border x:Name="BluetoothCard" Style="{StaticResource SideCard}" Padding="10" MouseLeave="OnSideHoverLeave">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="24"/>
+            <RowDefinition Height="Auto"/>
+          </Grid.RowDefinitions>
+          <Button Style="{StaticResource IconButton}" Width="26" Height="24" FontSize="12" Content="&#xE710;"
+                  HorizontalAlignment="Right" Click="OnBluetoothSettings"/>
+          <Grid Grid.Row="1" Margin="0,6,0,0" Height="200">
+            <ScrollViewer x:Name="BluetoothScroll" VerticalScrollBarVisibility="Auto">
+              <StackPanel x:Name="BluetoothList" Margin="0,0,4,0"/>
+            </ScrollViewer>
+            <TextBlock x:Name="BluetoothStatus" Foreground="#80FFFFFF" FontSize="12.5" HorizontalAlignment="Center"
+                       VerticalAlignment="Center" Visibility="Collapsed"/>
+          </Grid>
+        </Grid>
+      </Border>
+    </Popup>
+  </Grid>
+</Window>

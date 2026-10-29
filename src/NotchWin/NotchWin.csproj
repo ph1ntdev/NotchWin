@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- windows10.0.19041 даёт доступ к WinRT API: медиа, буфер обмена, уведомления -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>NotchWin</AssemblyName>
+    <RootNamespace>NotchWin</RootNamespace>
+    <!-- позволяет собирать проект не только на Windows (например, в CI) -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Захват системного звука для эквалайзера и уведомления о громкости -->
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <!-- События яркости ноутбучного экрана (WMI) -->
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <!-- Поиск файлов через индекс Windows Search -->
+    <PackageReference Include="System.Data.OleDb" Version="8.0.1" />
+    <!-- Чтение базы уведомлений Windows (Telegram, ВКонтакте) -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
+    <!-- Значки трея Windows на нашей панели (та же библиотека, что у RetroBar) -->
+    <PackageReference Include="ManagedShell" Version="0.0.374" />
+  </ItemGroup>
+
+</Project>
